@@ -1,0 +1,123 @@
+import Phaser from "phaser";
+import Player from "../entities/Player";
+
+const TILE_SIZE = 70;
+
+const MAZE = [
+	[1, 1, 1, 1, 1, 1, 1],
+	[1, 0, 0, 0, 0, 0, 1],
+	[1, 0, 1, 1, 1, 0, 1],
+	[1, 0, 1, 0, 1, 0, 1],
+	[1, 0, 1, 0, 0, 0, 1],
+	[1, 0, 0, 0, 1, 0, 1],
+	[1, 1, 1, 1, 1, 1, 1],
+];
+
+export default class GameScene extends Phaser.Scene {
+
+	private player!: Player;
+	private walls!: Phaser.Physics.Arcade.StaticGroup;
+	private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+	private wasd!: any;
+
+	constructor() {
+		super("GameScene");
+	}
+
+	create(): void {
+
+		this.walls = this.physics.add.staticGroup();
+
+		this.cursors = this.input.keyboard!.createCursorKeys();
+
+		this.wasd = this.input.keyboard!.addKeys({
+			up: Phaser.Input.Keyboard.KeyCodes.W,
+			down: Phaser.Input.Keyboard.KeyCodes.S,
+			left: Phaser.Input.Keyboard.KeyCodes.A,
+			right: Phaser.Input.Keyboard.KeyCodes.D,
+		});
+
+		// Create maze
+		for (let row = 0; row < MAZE.length; row++) {
+			for (let col = 0; col < MAZE[row].length; col++) {
+				if (MAZE[row][col] === 1) {
+					const wall = this.add.rectangle(
+						col * TILE_SIZE,
+						row * TILE_SIZE,
+						TILE_SIZE,
+						TILE_SIZE,
+						0x8ecae6
+					).setOrigin(0);
+
+					this.physics.add.existing(wall, true);
+					this.walls.add(wall);
+				}
+			}
+		}
+
+		// Create player
+		this.player = new Player(this, 1, 1, TILE_SIZE);
+
+		// Enable collision
+		this.physics.add.collider(this.player, this.walls);
+
+		this.createControls();
+	}
+
+	private createControls(): void {
+		const directions = [
+			{ label: "↑", x: 200, y: 650, dx: 0, dy: -1 },
+			{ label: "↓", x: 200, y: 720, dx: 0, dy: 1 },
+			{ label: "←", x: 130, y: 685, dx: -1, dy: 0 },
+			{ label: "→", x: 270, y: 685, dx: 1, dy: 0 },
+		];
+
+		directions.forEach(dir => {
+			const btn = this.add.text(dir.x, dir.y, dir.label, {
+				fontSize: "32px",
+				backgroundColor: "#ffcc00",
+				padding: { x: 15, y: 10 }
+			}).setOrigin(0.5);
+
+			btn.setInteractive();
+
+			btn.on("pointerdown", () => {
+				this.tryMove(dir.dx, dir.dy);
+			});
+
+			btn.on("pointerup", () => {
+			});
+		});
+	}
+
+	update(): void {
+		if (Phaser.Input.Keyboard.JustDown(this.cursors.left!)) this.tryMove(-1, 0);
+		else if (Phaser.Input.Keyboard.JustDown(this.cursors.right!)) this.tryMove(1, 0);
+		else if (Phaser.Input.Keyboard.JustDown(this.cursors.up!)) this.tryMove(0, -1);
+		else if (Phaser.Input.Keyboard.JustDown(this.cursors.down!)) this.tryMove(0, 1);
+	}
+
+	private tryMove(dx: number, dy: number) {
+		if (this.player.isMoving) return;
+
+		const newX = this.player.tileX + dx;
+		const newY = this.player.tileY + dy;
+
+		// Prevent moving into walls
+		if (MAZE[newY][newX] === 1) return;
+
+		this.player.tileX = newX;
+		this.player.tileY = newY;
+		this.player.isMoving = true;
+
+		this.tweens.add({
+			targets: this.player,
+			x: this.player.tileX * TILE_SIZE + TILE_SIZE / 2,
+			y: this.player.tileY * TILE_SIZE + TILE_SIZE / 2,
+			duration: 120,
+			onComplete: () => {
+				this.player.isMoving = false;
+			}
+		});
+	}
+}
