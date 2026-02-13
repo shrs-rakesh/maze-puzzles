@@ -8,13 +8,12 @@ const MAZE = [
 	[1, 0, 0, 0, 0, 0, 1],
 	[1, 0, 1, 1, 1, 0, 1],
 	[1, 0, 1, 0, 1, 0, 1],
-	[1, 0, 1, 0, 0, 0, 1],
+	[1, 0, 1, 0, 0, 2, 1],
 	[1, 0, 0, 0, 1, 0, 1],
 	[1, 1, 1, 1, 1, 1, 1],
 ];
 
 export default class GameScene extends Phaser.Scene {
-
 	private player!: Player;
 	private walls!: Phaser.Physics.Arcade.StaticGroup;
 	private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -25,7 +24,6 @@ export default class GameScene extends Phaser.Scene {
 	}
 
 	create(): void {
-
 		this.walls = this.physics.add.staticGroup();
 
 		this.cursors = this.input.keyboard!.createCursorKeys();
@@ -37,23 +35,8 @@ export default class GameScene extends Phaser.Scene {
 			right: Phaser.Input.Keyboard.KeyCodes.D,
 		});
 
-		// Create maze
-		for (let row = 0; row < MAZE.length; row++) {
-			for (let col = 0; col < MAZE[row].length; col++) {
-				if (MAZE[row][col] === 1) {
-					const wall = this.add.rectangle(
-						col * TILE_SIZE,
-						row * TILE_SIZE,
-						TILE_SIZE,
-						TILE_SIZE,
-						0x8ecae6
-					).setOrigin(0);
-
-					this.physics.add.existing(wall, true);
-					this.walls.add(wall);
-				}
-			}
-		}
+		// Create maze and goal tiles
+		this.createMaze();
 
 		// Create player
 		this.player = new Player(this, 1, 1, TILE_SIZE);
@@ -72,12 +55,14 @@ export default class GameScene extends Phaser.Scene {
 			{ label: "→", x: 270, y: 685, dx: 1, dy: 0 },
 		];
 
-		directions.forEach(dir => {
-			const btn = this.add.text(dir.x, dir.y, dir.label, {
-				fontSize: "32px",
-				backgroundColor: "#ffcc00",
-				padding: { x: 15, y: 10 }
-			}).setOrigin(0.5);
+		directions.forEach((dir) => {
+			const btn = this.add
+				.text(dir.x, dir.y, dir.label, {
+					fontSize: "32px",
+					backgroundColor: "#ffcc00",
+					padding: { x: 15, y: 10 },
+				})
+				.setOrigin(0.5);
 
 			btn.setInteractive();
 
@@ -85,16 +70,18 @@ export default class GameScene extends Phaser.Scene {
 				this.tryMove(dir.dx, dir.dy);
 			});
 
-			btn.on("pointerup", () => {
-			});
+			btn.on("pointerup", () => { });
 		});
 	}
 
 	update(): void {
 		if (Phaser.Input.Keyboard.JustDown(this.cursors.left!)) this.tryMove(-1, 0);
-		else if (Phaser.Input.Keyboard.JustDown(this.cursors.right!)) this.tryMove(1, 0);
-		else if (Phaser.Input.Keyboard.JustDown(this.cursors.up!)) this.tryMove(0, -1);
-		else if (Phaser.Input.Keyboard.JustDown(this.cursors.down!)) this.tryMove(0, 1);
+		else if (Phaser.Input.Keyboard.JustDown(this.cursors.right!))
+			this.tryMove(1, 0);
+		else if (Phaser.Input.Keyboard.JustDown(this.cursors.up!))
+			this.tryMove(0, -1);
+		else if (Phaser.Input.Keyboard.JustDown(this.cursors.down!))
+			this.tryMove(0, 1);
 	}
 
 	private tryMove(dx: number, dy: number) {
@@ -117,7 +104,48 @@ export default class GameScene extends Phaser.Scene {
 			duration: 120,
 			onComplete: () => {
 				this.player.isMoving = false;
-			}
+			},
 		});
+
+		if (MAZE[newY][newX] === 2) {
+			this.player.isMoving = false;
+			this.time.delayedCall(100, () => {
+				alert("You reached the goal! 🎉");
+				// Or restart / load next level
+			});
+			return;
+		}
+	}
+
+	private createMaze(): void {
+		for (let row = 0; row < MAZE.length; row++) {
+			for (let col = 0; col < MAZE[row].length; col++) {
+
+				// Walls
+				if (MAZE[row][col] === 1) {
+					const wall = this.add.rectangle(
+						col * TILE_SIZE,
+						row * TILE_SIZE,
+						TILE_SIZE,
+						TILE_SIZE,
+						0x8ecae6
+					).setOrigin(0);
+
+					this.physics.add.existing(wall, true);
+					this.walls.add(wall);
+				}
+
+				// Goal tile
+				if (MAZE[row][col] === 2) {
+					this.add.rectangle(
+						col * TILE_SIZE,
+						row * TILE_SIZE,
+						TILE_SIZE,
+						TILE_SIZE,
+						0x00ff00 // green
+					).setOrigin(0);
+				}
+			}
+		}
 	}
 }
