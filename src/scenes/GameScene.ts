@@ -1,34 +1,21 @@
 import Phaser from "phaser";
-import { LevelService } from "../services/LevelService";
-import type { Level } from "../services/LevelService";
+import { LevelManager } from "../LevelManager";
+import { LevelService, type Level } from "../services/LevelService";
 import { PlayerService } from "../services/PlayerService";
 import { UIService } from "../services/UIService";
 import { MazeService } from "../services/MazeService";
 import { InputService } from "../services/InputService";
-
-const TILE_SIZE = 70;
-
-const LEVEL: Level = {
-	maze: [
-		[1, 1, 1, 1, 1, 1, 1],
-		[1, 0, 0, 0, 0, 0, 1],
-		[1, 0, 1, 1, 1, 0, 1],
-		[1, 0, 1, 0, 1, 0, 1],
-		[1, 0, 1, 0, 0, 2, 1],
-		[1, 0, 0, 0, 1, 0, 1],
-		[1, 1, 1, 1, 1, 1, 1],
-	],
-	startX: 1,
-	startY: 1
-};
+import { CameraService } from "../services/CameraService";
+import { LEVELS } from "../contents/levels";
+import { TILE_SIZE } from "../contents/constants";
 
 export default class GameScene extends Phaser.Scene {
-	private levelService!: LevelService;
+	private levelManager!: LevelManager;
 	private playerService!: PlayerService;
 	private uiService!: UIService;
 	private mazeService!: MazeService;
 	private inputService!: InputService;
-	private walls!: Phaser.Physics.Arcade.StaticGroup;
+	private cameraService!: CameraService;
 	private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
 
 	constructor() {
@@ -36,27 +23,19 @@ export default class GameScene extends Phaser.Scene {
 	}
 
 	create(): void {
-		this.cursors = this.input.keyboard?.createCursorKeys()!;
+		// Initialize keyboard cursors
+		this.cursors = this.input.keyboard!.createCursorKeys();
 
-		// Services
-		this.levelService = new LevelService(LEVEL);
+		// Initialize services
+		this.levelManager = new LevelManager(LEVELS);
 		this.playerService = new PlayerService(this);
 		this.uiService = new UIService(this);
 		this.mazeService = new MazeService(this);
 		this.inputService = new InputService(this);
+		this.cameraService = new CameraService(this, this.playerService, TILE_SIZE);
 
-		this.walls = this.physics.add.staticGroup();
-
-		// Maze & goal
-		this.mazeService.createMaze(this.levelService);
-
-		// Player
-		const { startX, startY } = LEVEL;
-		this.playerService.createPlayer(startX, startY);
-		this.physics.add.collider(this.playerService.player, this.walls);
-
-		// UI Controls (arrow buttons)
-		this.uiService.createControls((dx, dy) => this.handleMove(dx, dy));
+		// Load the first level
+		this.loadCurrentLevel();
 	}
 
 	update(): void {
@@ -69,10 +48,45 @@ export default class GameScene extends Phaser.Scene {
 		this.inputService.update((dx, dy) => this.handleMove(dx, dy));
 	}
 
-	// Centralized move logic
+	/** Centralized move logic for both keyboard & arrow buttons */
 	private handleMove(dx: number, dy: number) {
-		this.playerService.movePlayer(dx, dy, this.levelService, () => {
-			alert("You reached the goal! 🎉");
+		// Wrap the current Level in a LevelService for compatibility
+		const currentLevelService = new LevelService(this.levelManager.getCurrentLevel());
+
+		this.playerService.movePlayer(dx, dy, currentLevelService, () => {
+			// Advance to the next level
+			const nextLevel = this.levelManager.nextLevel();
+
+			if (nextLevel) {
+				alert(`Level ${this.levelManager.getCurrentIndex() + 1} loading...`);
+				this.loadCurrentLevel();
+			} else {
+				alert("All levels complete!");
+				this.scene.start("MenuScene");
+			}
 		});
+	}
+
+	/** Load the current level from LevelManager */
+	private loadCurrentLevel() {
+		// Wrap the current Level in a LevelService
+		const levelService = new LevelService(this.levelManager.getCurrentLevel());
+
+		// Create maze and goal
+		this.mazeService.createMaze(levelService);
+
+		// Spawn player at start position
+		this.playerService.createPlayer(levelService.startX, levelService.startY);
+
+		// Add physics collider for walls
+		this.physics.add.collider(this.playerService.player, this.mazeService.walls);
+
+		// Arrow button controls
+		this.uiService.createControls((dx, dy) => this.handleMove(dx, dy));
+
+		// Camera setup
+		const rows = levelService.getRows();
+    	const cols = levelService.getCols();
+    	this.cameraService.setupCamera(cols, rows);
 	}
 }
