@@ -48,29 +48,33 @@ export default class GameScene extends Phaser.Scene {
 	}
 
 	private createControls(): void {
+		const baseX = 230;   // left side
+		const baseY = 625;   // bottom area
+		const spacing = 70;
 		const directions = [
-			{ label: "↑", x: 200, y: 650, dx: 0, dy: -1 },
-			{ label: "↓", x: 200, y: 720, dx: 0, dy: 1 },
-			{ label: "←", x: 130, y: 685, dx: -1, dy: 0 },
-			{ label: "→", x: 270, y: 685, dx: 1, dy: 0 },
+			{ dx: 0, dy: -1, x: baseX, y: baseY - spacing, label: "↑" },
+			{ dx: 0, dy: 1, x: baseX, y: baseY + spacing, label: "↓" },
+			{ dx: -1, dy: 0, x: baseX - spacing, y: baseY, label: "←" },
+			{ dx: 1, dy: 0, x: baseX + spacing, y: baseY, label: "→" },
 		];
 
 		directions.forEach((dir) => {
-			const btn = this.add
-				.text(dir.x, dir.y, dir.label, {
-					fontSize: "32px",
-					backgroundColor: "#ffcc00",
-					padding: { x: 15, y: 10 },
-				})
-				.setOrigin(0.5);
+			const button = this.add.circle(dir.x, dir.y, 35, 0xffee00, 0.6);
+			button.setStrokeStyle(3, 0xffffff);
+			button.setInteractive({
+				useHandCursor: true
+			});
 
-			btn.setInteractive();
+			const text = this.add.text(dir.x, dir.y, dir.label, {
+				fontSize: "30px",
+				color: "#ffffff",
+			}).setOrigin(0.5);
 
-			btn.on("pointerdown", () => {
+			button.on("pointerdown", () => {
 				this.tryMove(dir.dx, dir.dy);
 			});
 
-			btn.on("pointerup", () => { });
+			button.on("pointerup", () => { });
 		});
 	}
 
