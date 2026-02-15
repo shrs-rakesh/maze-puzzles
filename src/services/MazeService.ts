@@ -1,49 +1,56 @@
 import Phaser from "phaser";
 import { LevelService } from "./LevelService";
 
-const TILE_SIZE = 70;
-
 export class MazeService {
-	private scene: Phaser.Scene;
-	public walls!: Phaser.Physics.Arcade.StaticGroup;
+    private scene: Phaser.Scene;
+    public walls!: Phaser.Physics.Arcade.StaticGroup;
+    private goals: Phaser.GameObjects.Rectangle[] = []; // track goal tiles
 
-	constructor(scene: Phaser.Scene) {
-		this.scene = scene;
-		this.walls = this.scene.physics.add.staticGroup();
-	}
+    constructor(scene: Phaser.Scene) {
+        this.scene = scene;
+        this.walls = this.scene.physics.add.staticGroup();
+    }
 
-	/**
-	 * Creates maze walls and goal based on the current level.
-	 */
-	createMaze(levelService: LevelService) {
-		// Clear previous walls
-		this.walls.clear(true, true);
+    createMaze(levelService: LevelService, tileSize: number, offsetX: number, offsetY: number) {
+        // Clear walls
+        this.walls.clear(true, true);
 
-		const maze = levelService.currentMaze;
+        // Clear previous goal tiles
+        this.goals.forEach(goal => goal.destroy());
+        this.goals = [];
 
-		for (let row = 0; row < maze.length; row++) {
-			for (let col = 0; col < maze[row].length; col++) {
-				if (maze[row][col] === 1) {
-					const wall = this.scene.add.rectangle(
-						col * TILE_SIZE,
-						row * TILE_SIZE,
-						TILE_SIZE,
-						TILE_SIZE,
-						0x8ecae6
-					).setOrigin(0);
+        const maze = levelService.currentMaze;
+        const rows = maze.length;
+        const cols = maze[0].length;
 
-					this.scene.physics.add.existing(wall, true);
-					this.walls.add(wall);
-				} else if (maze[row][col] === 2) {
-					this.scene.add.rectangle(
-						col * TILE_SIZE,
-						row * TILE_SIZE,
-						TILE_SIZE,
-						TILE_SIZE,
-						0x00ff00
-					).setOrigin(0);
-				}
-			}
-		}
-	}
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const x = offsetX + col * tileSize;
+                const y = offsetY + row * tileSize;
+
+                if (maze[row][col] === 1) {
+                    const wall = this.scene.add.rectangle(
+                        x,
+                        y,
+                        tileSize,
+                        tileSize,
+                        0x8ecae6
+                    ).setOrigin(0);
+
+                    this.scene.physics.add.existing(wall, true);
+                    this.walls.add(wall);
+
+                } else if (maze[row][col] === 2) {
+                    const goal = this.scene.add.rectangle(
+                        x,
+                        y,
+                        tileSize,
+                        tileSize,
+                        0x00ff00
+                    ).setOrigin(0);
+                    this.goals.push(goal);
+                }
+            }
+        }
+    }
 }

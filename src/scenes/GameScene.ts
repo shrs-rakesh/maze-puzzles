@@ -1,13 +1,12 @@
 import Phaser from "phaser";
 import { LevelManager } from "../LevelManager";
-import { LevelService, type Level } from "../services/LevelService";
+import { LevelService } from "../services/LevelService";
 import { PlayerService } from "../services/PlayerService";
 import { UIService } from "../services/UIService";
 import { MazeService } from "../services/MazeService";
 import { InputService } from "../services/InputService";
 import { CameraService } from "../services/CameraService";
 import { LEVELS } from "../contents/levels";
-import { TILE_SIZE } from "../contents/constants";
 
 export default class GameScene extends Phaser.Scene {
 	private levelManager!: LevelManager;
@@ -23,38 +22,32 @@ export default class GameScene extends Phaser.Scene {
 	}
 
 	create(): void {
-		// Initialize keyboard cursors
 		this.cursors = this.input.keyboard!.createCursorKeys();
 
-		// Initialize services
 		this.levelManager = new LevelManager(LEVELS);
 		this.playerService = new PlayerService(this);
 		this.uiService = new UIService(this);
 		this.mazeService = new MazeService(this);
 		this.inputService = new InputService(this);
-		this.cameraService = new CameraService(this, this.playerService, TILE_SIZE);
 
-		// Load the first level
 		this.loadCurrentLevel();
 	}
 
 	update(): void {
-		if (!this.cursors) return; // safety check
+		if (!this.cursors) return;
 		this.handleKeyboardInput();
 	}
 
-	// Handle keyboard input
 	private handleKeyboardInput() {
 		this.inputService.update((dx, dy) => this.handleMove(dx, dy));
 	}
 
-	/** Centralized move logic for both keyboard & arrow buttons */
 	private handleMove(dx: number, dy: number) {
-		// Wrap the current Level in a LevelService for compatibility
-		const currentLevelService = new LevelService(this.levelManager.getCurrentLevel());
+		const currentLevelService = new LevelService(
+			this.levelManager.getCurrentLevel()
+		);
 
 		this.playerService.movePlayer(dx, dy, currentLevelService, () => {
-			// Advance to the next level
 			const nextLevel = this.levelManager.nextLevel();
 
 			if (nextLevel) {
@@ -67,26 +60,58 @@ export default class GameScene extends Phaser.Scene {
 		});
 	}
 
-	/** Load the current level from LevelManager */
 	private loadCurrentLevel() {
-		// Wrap the current Level in a LevelService
-		const levelService = new LevelService(this.levelManager.getCurrentLevel());
+		const level = this.levelManager.getCurrentLevel();
+		const levelService = new LevelService(level);
 
-		// Create maze and goal
-		this.mazeService.createMaze(levelService);
+		const rows = level.maze.length;
+		const cols = level.maze[0].length;
 
-		// Spawn player at start position
-		this.playerService.createPlayer(levelService.startX, levelService.startY);
+		const GAME_WIDTH = 480;
+		const WORLD_HEIGHT = 600; // reserve bottom for UI
 
-		// Add physics collider for walls
-		this.physics.add.collider(this.playerService.player, this.mazeService.walls);
+		// Dynamic tile size
+		const tileSize = Math.floor(
+			Math.min(
+				GAME_WIDTH / cols,
+				WORLD_HEIGHT / rows
+			)
+		);
 
-		// Arrow button controls
-		this.uiService.createControls((dx, dy) => this.handleMove(dx, dy));
+		// Maze offsets
+		const offsetX = (GAME_WIDTH - cols * tileSize) / 2;
+		const offsetY = (WORLD_HEIGHT - rows * tileSize) / 2;
+
+		// Create maze
+		this.mazeService.createMaze(levelService, tileSize, offsetX, offsetY);
+
+		// Create player aligned with maze
+		this.playerService.createPlayer(
+			levelService.startX,
+			levelService.startY,
+			tileSize,
+			offsetX,
+			offsetY
+		);
+
+		// Physics collider
+		this.physics.add.collider(
+			this.playerService.player,
+			this.mazeService.walls
+		);
+
+		// Arrow UI
+		this.uiService.createControls((dx, dy) =>
+			this.handleMove(dx, dy)
+		);
 
 		// Camera setup
-		const rows = levelService.getRows();
-    	const cols = levelService.getCols();
-    	this.cameraService.setupCamera(cols, rows);
+		this.cameraService = new CameraService(
+			this,
+			this.playerService,
+			tileSize
+		);
+
+		this.cameraService.setupCamera(cols, rows);
 	}
 }
