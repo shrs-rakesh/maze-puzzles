@@ -6,112 +6,109 @@ import { UIService } from "../services/UIService";
 import { MazeService } from "../services/MazeService";
 import { InputService } from "../services/InputService";
 import { CameraService } from "../services/CameraService";
+import { TransitionService } from "../services/TransitionService";
 import { LEVELS } from "../contents/levels";
+import { UI_HEIGHT, FIXED_TILE_SIZE } from "../contents/constants";
 
 export default class GameScene extends Phaser.Scene {
 	private levelManager!: LevelManager;
+	private currentLevelService!: LevelService;
 	private playerService!: PlayerService;
 	private uiService!: UIService;
 	private mazeService!: MazeService;
 	private inputService!: InputService;
 	private cameraService!: CameraService;
-	private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+	private wallCollider!: Phaser.Physics.Arcade.Collider;
+	private transitionService!: TransitionService;
 
 	constructor() {
 		super("GameScene");
 	}
 
 	create(): void {
-		this.cursors = this.input.keyboard!.createCursorKeys();
-
 		this.levelManager = new LevelManager(LEVELS);
 		this.playerService = new PlayerService(this);
 		this.uiService = new UIService(this);
 		this.mazeService = new MazeService(this);
 		this.inputService = new InputService(this);
-
+		this.cameraService = new CameraService(this, this.playerService);
+		this.transitionService = new TransitionService(this);
 		this.loadCurrentLevel();
 	}
 
 	update(): void {
-		if (!this.cursors) return;
-		this.handleKeyboardInput();
-	}
-
-	private handleKeyboardInput() {
 		this.inputService.update((dx, dy) => this.handleMove(dx, dy));
 	}
 
 	private handleMove(dx: number, dy: number) {
-		const currentLevelService = new LevelService(
-			this.levelManager.getCurrentLevel()
-		);
-
-		this.playerService.movePlayer(dx, dy, currentLevelService, () => {
+		this.playerService.movePlayer(dx, dy, this.currentLevelService, () => {
 			const nextLevel = this.levelManager.nextLevel();
-
 			if (nextLevel) {
-				alert(`Level ${this.levelManager.getCurrentIndex() + 1} loading...`);
-				this.loadCurrentLevel();
+				this.transitionService.showLevelStart(this.levelManager.getCurrentIndex() + 1, () => {
+					this.loadCurrentLevel();
+				});
 			} else {
-				alert("All levels complete!");
-				this.scene.start("MenuScene");
+				this.transitionService.showVictory(() => {
+					this.scene.start("MenuScene");
+				});
 			}
 		});
 	}
 
+	private clearLevel() {
+		this.mazeService.clear();
+		this.uiService.clear();
+		if (this.wallCollider) {
+			this.physics.world.removeCollider(this.wallCollider);
+		}
+	}
+
 	private loadCurrentLevel() {
+		this.clearLevel();
+
 		const level = this.levelManager.getCurrentLevel();
-		const levelService = new LevelService(level);
+		this.currentLevelService = new LevelService(level);
 
 		const rows = level.maze.length;
 		const cols = level.maze[0].length;
 
-		const GAME_WIDTH = 480;
-		const WORLD_HEIGHT = 600; // reserve bottom for UI
+		const tileSize = FIXED_TILE_SIZE;
 
-		// Dynamic tile size
-		const tileSize = Math.floor(
-			Math.min(
-				GAME_WIDTH / cols,
-				WORLD_HEIGHT / rows
-			)
-		);
+		const mazePixelW = cols * tileSize;
+		const mazePixelH = rows * tileSize;
+		const { width: screenW, height: screenH } = this.scale;
 
-		// Maze offsets
-		const offsetX = (GAME_WIDTH - cols * tileSize) / 2;
-		const offsetY = (WORLD_HEIGHT - rows * tileSize) / 2;
+		// Reserve bottom for UI so maze centers only within the gameplay area
+		const gameplayH = screenH - UI_HEIGHT;
 
-		// Create maze
-		this.mazeService.createMaze(levelService, tileSize, offsetX, offsetY);
+		// Center maze if it fits; scroll if it is larger than screen
+		const offsetX = mazePixelW < screenW ? (screenW - mazePixelW) / 2 : 0;
+		const offsetY = mazePixelH < gameplayH ? (gameplayH - mazePixelH) / 2 : 0;
 
-		// Create player aligned with maze
+		// Build maze at world coordinates
+		this.mazeService.createMaze(this.currentLevelService, tileSize, offsetX, offsetY);
+
+		// Place player
 		this.playerService.createPlayer(
-			levelService.startX,
-			levelService.startY,
+			this.currentLevelService.startX,
+			this.currentLevelService.startY,
 			tileSize,
 			offsetX,
 			offsetY
 		);
 
 		// Physics collider
-		this.physics.add.collider(
+		this.wallCollider = this.physics.add.collider(
 			this.playerService.player,
 			this.mazeService.walls
 		);
 
-		// Arrow UI
-		this.uiService.createControls((dx, dy) =>
-			this.handleMove(dx, dy)
-		);
+		// UI is fixed to camera — not affected by world scroll
+		this.uiService.createControls((dx, dy) => this.handleMove(dx, dy));
 
-		// Camera setup
-		this.cameraService = new CameraService(
-			this,
-			this.playerService,
-			tileSize
-		);
-
-		this.cameraService.setupCamera(cols, rows);
+		// Setup scrolling camera
+		this.cameraService.reset(this.playerService);
+		this.cameraService.setupCamera(cols, rows, offsetX, offsetY);
 	}
+
 }

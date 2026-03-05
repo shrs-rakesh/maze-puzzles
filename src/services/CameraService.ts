@@ -1,35 +1,58 @@
 import Phaser from "phaser";
 import { PlayerService } from "./PlayerService";
 
+// Fixed tile size regardless - world scrolls instead of shrinking
+import { FIXED_TILE_SIZE, CAMERA_LERP } from "../contents/constants";
+
 export class CameraService {
-    private scene: Phaser.Scene;
-    private playerService: PlayerService;
-    private tileSize: number;
+	private scene: Phaser.Scene;
+	private playerService: PlayerService;
 
-    constructor(scene: Phaser.Scene, playerService: PlayerService, tileSize: number) {
-        this.scene = scene;
-        this.playerService = playerService;
-        this.tileSize = tileSize;
-    }
+	constructor(scene: Phaser.Scene, playerService: PlayerService) {
+		this.scene = scene;
+		this.playerService = playerService;
+	}
 
-    /**
-     * Setup the camera to follow the player within the maze bounds
-     */
-    setupCamera(mazeWidthInTiles: number, mazeHeightInTiles: number) {
-        const mazeWidth = mazeWidthInTiles * this.tileSize;
-        const mazeHeight = mazeHeightInTiles * this.tileSize;
+	reset(playerService: PlayerService) {
+		this.playerService = playerService;
+	}
 
-        // Set world bounds
-        this.scene.physics.world.setBounds(0, 0, mazeWidth, mazeHeight);
-        this.scene.cameras.main.setBounds(0, 0, mazeWidth, mazeHeight);
+	setupCamera(
+		mazeWidthInTiles: number,
+		mazeHeightInTiles: number,
+		offsetX = 0,
+		offsetY = 0
+	) {
+		const mazeWidth = mazeWidthInTiles * FIXED_TILE_SIZE;
+		const mazeHeight = mazeHeightInTiles * FIXED_TILE_SIZE;
+		const { width: screenW, height: screenH } = this.scene.scale;
+		const UI_HEIGHT = 180;
+		const gameplayH = screenH - UI_HEIGHT;
 
-        // Make camera follow the player with smooth lerp
-        this.scene.cameras.main.startFollow(this.playerService.player, true, 0.1, 0.1);
+		// If maze fits within gameplay area it is centered — lock camera to screen
+		// If maze is larger — camera scrolls within maze bounds
+		const isCenteredX = mazeWidth < screenW;
+		const isCenteredY = mazeHeight < gameplayH;
 
-        // Optional: set zoom if needed
-        this.scene.cameras.main.setZoom(1);
+		const boundsX = isCenteredX ? 0 : offsetX;
+		const boundsY = isCenteredY ? 0 : offsetY;
+		const boundsW = isCenteredX ? screenW : mazeWidth;
+		const boundsH = isCenteredY ? screenH : mazeHeight;
 
-        // Optional: add deadzone for arcade-style camera
-        // this.scene.cameras.main.setDeadzone(150, 150);
-    }
+		this.scene.physics.world.setBounds(boundsX, boundsY, boundsW, boundsH);
+		this.scene.cameras.main.setBounds(boundsX, boundsY, boundsW, boundsH);
+
+		// Smooth follow — camera scrolls to keep player centered
+		this.scene.cameras.main.startFollow(
+			this.playerService.player,
+			true,
+			CAMERA_LERP,
+			CAMERA_LERP
+		);
+
+		this.scene.cameras.main.setZoom(1);
+
+		// Small deadzone so camera doesn't jitter on every step
+		this.scene.cameras.main.setDeadzone(FIXED_TILE_SIZE, FIXED_TILE_SIZE);
+	}
 }

@@ -1,33 +1,43 @@
+import { TILE } from "../contents/constants";
+
 export type Level = {
-    maze: number[][];
-    startX: number;
-    startY: number;
+	maze: number[][];
+	startX: number;
+	startY: number;
 };
 
 export class LevelService {
-    public currentMaze: number[][];
-    public startX: number;
-    public startY: number;
+	public readonly currentMaze: number[][];
+	public readonly startX: number;
+	public readonly startY: number;
 
-    constructor(level: Level) {
-        this.currentMaze = level.maze;
-        this.startX = level.startX;
-        this.startY = level.startY;
-    }
+	constructor(level: Level) {
+		this.currentMaze = level.maze;
+		this.startX = level.startX;
+		this.startY = level.startY;
+	}
 
-    isWall(x: number, y: number) {
-        return this.currentMaze[y][x] === 1;
-    }
+	// General tile getter with bounds safety
+	getTile(x: number, y: number): number {
+		if (y < 0 || y >= this.getRows() || x < 0 || x >= this.getCols()) {
+			return TILE.WALL; // treat out-of-bounds as wall
+		}
+		return this.currentMaze[y][x];
+	}
 
-    isGoal(x: number, y: number) {
-        return this.currentMaze[y][x] === 2;
-    }
+	isWall(x: number, y: number): boolean {
+		return this.getTile(x, y) === TILE.WALL;
+	}
 
-    getRows() {
-        return this.currentMaze.length;
-    }
+	isGoal(x: number, y: number): boolean {
+		return this.getTile(x, y) === TILE.GOAL;
+	}
 
-    getCols() {
-        return this.currentMaze[0].length;
-    }
+	getRows(): number {
+		return this.currentMaze.length;
+	}
+
+	getCols(): number {
+		return this.currentMaze[0]?.length ?? 0;
+	}
 }

@@ -1,42 +1,59 @@
-// PlayerService.ts
 import Phaser from "phaser";
 import Player from "../entities/Player";
+import { LevelService } from "./LevelService";
+import { MOVE_DURATION_MS } from "../contents/constants";
+
+interface Layout {
+	tileSize: number;
+	offsetX: number;
+	offsetY: number;
+}
 
 export class PlayerService {
 	private scene: Phaser.Scene;
 	public player!: Player;
-
-	private tileSize!: number;
-	private offsetX!: number;
-	private offsetY!: number;
+	private layout: Layout | null = null;
 
 	constructor(scene: Phaser.Scene) {
 		this.scene = scene;
 	}
 
-	createPlayer(tileX: number, tileY: number, tileSize: number, offsetX: number, offsetY: number) {
-        // Remove old player if exists
-        if (this.player) this.player.destroy();
+	createPlayer(
+		tileX: number,
+		tileY: number,
+		tileSize: number,
+		offsetX: number,
+		offsetY: number
+	): Player {
+		// Kill any running tween and destroy old player cleanly
+		if (this.player) {
+			this.scene.tweens.killTweensOf(this.player);
+			this.player.destroy();
+		}
 
-        this.tileSize = tileSize;
-        this.offsetX = offsetX;
-        this.offsetY = offsetY;
+		this.layout = { tileSize, offsetX, offsetY };
 
-        this.player = new Player(
-            this.scene,
-            offsetX + tileX * tileSize + tileSize / 2,
-            offsetY + tileY * tileSize + tileSize / 2,
-            tileSize
-        );
+		const px = offsetX + tileX * tileSize + tileSize / 2;
+		const py = offsetY + tileY * tileSize + tileSize / 2;
 
-        this.player.tileX = tileX;
-        this.player.tileY = tileY;
-        this.player.isMoving = false;
+		this.player = new Player(this.scene, px, py, tileSize, tileX, tileY);
+		this.player.isMoving = false;
 
-        return this.player;
-    }
+		// Add arcade physics body so colliders work
+		this.scene.physics.add.existing(this.player);
+		const body = this.player.body as Phaser.Physics.Arcade.Body;
+		body.setCollideWorldBounds(true);
 
-	movePlayer(dx: number, dy: number, levelService: any, onGoal: () => void) {
+		return this.player;
+	}
+
+	movePlayer(
+		dx: number,
+		dy: number,
+		levelService: LevelService,
+		onGoal: () => void
+	) {
+		if (!this.layout) return;
 		if (this.player.isMoving) return;
 
 		const newX = this.player.tileX + dx;
@@ -48,17 +65,22 @@ export class PlayerService {
 		this.player.tileY = newY;
 		this.player.isMoving = true;
 
+		const { tileSize, offsetX, offsetY } = this.layout;
+
 		this.scene.tweens.add({
 			targets: this.player,
-			x: this.offsetX + newX * this.tileSize + this.tileSize / 2,
-			y: this.offsetY + newY * this.tileSize + this.tileSize / 2,
-			duration: 120,
+			x: offsetX + newX * tileSize + tileSize / 2,
+			y: offsetY + newY * tileSize + tileSize / 2,
+			duration: MOVE_DURATION_MS,
+			ease: "Quad.easeOut",
 			onComplete: () => {
+				// Guard: player may have been destroyed during level transition
+				if (!this.player?.active) return;
 				this.player.isMoving = false;
 				if (levelService.isGoal(newX, newY)) {
 					onGoal();
 				}
-			}
+			},
 		});
 	}
 }
