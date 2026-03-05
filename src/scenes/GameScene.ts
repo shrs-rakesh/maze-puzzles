@@ -7,6 +7,8 @@ import { MazeService } from "../services/MazeService";
 import { InputService } from "../services/InputService";
 import { CameraService } from "../services/CameraService";
 import { TransitionService } from "../services/TransitionService";
+import { StatsService } from "../services/StatsService";
+import { HUDService } from "../services/HUDService";
 import { LEVELS } from "../contents/levels";
 import { UI_HEIGHT, FIXED_TILE_SIZE } from "../contents/constants";
 
@@ -18,8 +20,10 @@ export default class GameScene extends Phaser.Scene {
 	private mazeService!: MazeService;
 	private inputService!: InputService;
 	private cameraService!: CameraService;
-	private wallCollider!: Phaser.Physics.Arcade.Collider;
 	private transitionService!: TransitionService;
+	private statsService!: StatsService;
+	private hudService!: HUDService;
+	private wallCollider!: Phaser.Physics.Arcade.Collider;
 
 	constructor() {
 		super("GameScene");
@@ -33,31 +37,51 @@ export default class GameScene extends Phaser.Scene {
 		this.inputService = new InputService(this);
 		this.cameraService = new CameraService(this, this.playerService);
 		this.transitionService = new TransitionService(this);
+		this.statsService = new StatsService();
+		this.hudService = new HUDService(this, this.statsService);
 		this.loadCurrentLevel();
 	}
 
 	update(): void {
 		this.inputService.update((dx, dy) => this.handleMove(dx, dy));
+		this.hudService.update(); // refreshes timer + step counter every frame
 	}
 
 	private handleMove(dx: number, dy: number) {
-		this.playerService.movePlayer(dx, dy, this.currentLevelService, () => {
-			const nextLevel = this.levelManager.nextLevel();
-			if (nextLevel) {
-				this.transitionService.showLevelStart(this.levelManager.getCurrentIndex() + 1, () => {
-					this.loadCurrentLevel();
-				});
-			} else {
-				this.transitionService.showVictory(() => {
-					this.scene.start("MenuScene");
-				});
-			}
-		});
+		this.playerService.movePlayer(
+			dx, dy,
+			this.currentLevelService,
+			() => {
+				this.statsService.stopLevel();
+				const currentIndex = this.levelManager.getCurrentIndex();
+				const nextLevel = this.levelManager.nextLevel();
+				this.transitionService.showLevelComplete(
+					this.statsService,
+					currentIndex,
+					LEVELS[currentIndex].par,
+					() => {
+						if (nextLevel) {
+							this.transitionService.showLevelStart(
+								this.levelManager.getCurrentIndex() + 1,
+								() => this.loadCurrentLevel()
+							);
+						} else {
+							this.transitionService.showVictory(this.statsService, () => {
+								this.scene.start("MenuScene");
+							});
+						}
+					}
+				);
+			},
+			() => this.statsService.incrementSteps() // onStep: only on successful move
+		);
 	}
+
 
 	private clearLevel() {
 		this.mazeService.clear();
 		this.uiService.clear();
+		this.hudService.clear();
 		if (this.wallCollider) {
 			this.physics.world.removeCollider(this.wallCollider);
 		}
@@ -71,21 +95,17 @@ export default class GameScene extends Phaser.Scene {
 
 		const rows = level.maze.length;
 		const cols = level.maze[0].length;
-
 		const tileSize = FIXED_TILE_SIZE;
 
 		const mazePixelW = cols * tileSize;
 		const mazePixelH = rows * tileSize;
 		const { width: screenW, height: screenH } = this.scale;
 
-		// Reserve bottom for UI so maze centers only within the gameplay area
 		const gameplayH = screenH - UI_HEIGHT;
-
-		// Center maze if it fits; scroll if it is larger than screen
 		const offsetX = mazePixelW < screenW ? (screenW - mazePixelW) / 2 : 0;
 		const offsetY = mazePixelH < gameplayH ? (gameplayH - mazePixelH) / 2 : 0;
 
-		// Build maze at world coordinates
+		// Build maze
 		this.mazeService.createMaze(this.currentLevelService, tileSize, offsetX, offsetY);
 
 		// Place player
@@ -103,12 +123,20 @@ export default class GameScene extends Phaser.Scene {
 			this.mazeService.walls
 		);
 
-		// UI is fixed to camera — not affected by world scroll
+		// UI controls
 		this.uiService.createControls((dx, dy) => this.handleMove(dx, dy));
 
-		// Setup scrolling camera
+		// HUD — level indicator, steps, timer
+		this.hudService.create(
+			this.levelManager.getCurrentIndex(),
+			LEVELS.length
+		);
+
+		// Camera
 		this.cameraService.reset(this.playerService);
 		this.cameraService.setupCamera(cols, rows, offsetX, offsetY);
-	}
 
+		// Start tracking stats for this level
+		this.statsService.startLevel();
+	}
 }

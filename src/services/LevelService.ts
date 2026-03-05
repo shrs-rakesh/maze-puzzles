@@ -4,6 +4,7 @@ export type Level = {
 	maze: number[][];
 	startX: number;
 	startY: number;
+	par?: number; // expected steps for a perfect solve
 };
 
 export class LevelService {

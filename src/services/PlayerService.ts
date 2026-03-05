@@ -51,7 +51,8 @@ export class PlayerService {
 		dx: number,
 		dy: number,
 		levelService: LevelService,
-		onGoal: () => void
+		onGoal: () => void,
+		onStep?: () => void
 	) {
 		if (!this.layout) return;
 		if (this.player.isMoving) return;
@@ -60,6 +61,9 @@ export class PlayerService {
 		const newY = this.player.tileY + dy;
 
 		if (levelService.isWall(newX, newY)) return;
+
+		// Count only successful moves
+		onStep?.();
 
 		this.player.tileX = newX;
 		this.player.tileY = newY;
