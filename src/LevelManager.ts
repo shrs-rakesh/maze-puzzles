@@ -35,4 +35,8 @@ export class LevelManager {
     public getCurrentIndex(): number {
         return this.currentIndex;
     }
+
+    resetCurrentLevel(): void {
+		// Index stays the same, just signals a reload
+	}
 }

@@ -9,6 +9,7 @@ import { CameraService } from "../services/CameraService";
 import { TransitionService } from "../services/TransitionService";
 import { StatsService } from "../services/StatsService";
 import { HUDService } from "../services/HUDService";
+import { EnemyService } from "../services/EnemyService";
 import { LEVELS } from "../contents/levels";
 import { UI_HEIGHT, FIXED_TILE_SIZE } from "../contents/constants";
 
@@ -24,6 +25,7 @@ export default class GameScene extends Phaser.Scene {
 	private statsService!: StatsService;
 	private hudService!: HUDService;
 	private wallCollider!: Phaser.Physics.Arcade.Collider;
+	private enemyService!: EnemyService;
 
 	constructor() {
 		super("GameScene");
@@ -39,6 +41,7 @@ export default class GameScene extends Phaser.Scene {
 		this.transitionService = new TransitionService(this);
 		this.statsService = new StatsService();
 		this.hudService = new HUDService(this, this.statsService);
+		this.enemyService = new EnemyService(this);
 		this.loadCurrentLevel();
 	}
 
@@ -52,6 +55,7 @@ export default class GameScene extends Phaser.Scene {
 			dx, dy,
 			this.currentLevelService,
 			() => {
+				// onGoal
 				this.statsService.stopLevel();
 				const currentIndex = this.levelManager.getCurrentIndex();
 				const nextLevel = this.levelManager.nextLevel();
@@ -73,7 +77,25 @@ export default class GameScene extends Phaser.Scene {
 					}
 				);
 			},
-			() => this.statsService.incrementSteps() // onStep: only on successful move
+			() => {
+				// onStep: fires immediately on valid move — trigger enemy movement
+				this.statsService.incrementSteps();
+				this.enemyService.onPlayerStep(
+					this.currentLevelService,
+					() => ({
+						x: this.playerService.player.tileX,
+						y: this.playerService.player.tileY,
+					}),
+					() => this.handleCaught()
+				);
+			},
+			(tileX, tileY) => {
+				// onArrive: fires when player tween completes — check if landed on enemy
+				const enemyTile = this.enemyService.getEnemyTile();
+				if (enemyTile && tileX === enemyTile.x && tileY === enemyTile.y) {
+					this.handleCaught();
+				}
+			}
 		);
 	}
 
@@ -82,6 +104,7 @@ export default class GameScene extends Phaser.Scene {
 		this.mazeService.clear();
 		this.uiService.clear();
 		this.hudService.clear();
+		this.enemyService.clear();
 		if (this.wallCollider) {
 			this.physics.world.removeCollider(this.wallCollider);
 		}
@@ -117,6 +140,16 @@ export default class GameScene extends Phaser.Scene {
 			offsetY
 		);
 
+		// Spawn enemy on open tile away from player
+		this.enemyService.createEnemy(
+			this.currentLevelService,
+			tileSize,
+			offsetX,
+			offsetY,
+			this.currentLevelService.startX,
+			this.currentLevelService.startY
+		);
+
 		// Physics collider
 		this.wallCollider = this.physics.add.collider(
 			this.playerService.player,
@@ -138,5 +171,14 @@ export default class GameScene extends Phaser.Scene {
 
 		// Start tracking stats for this level
 		this.statsService.startLevel();
+	}
+	private handleCaught(): void {
+		// Flash screen red then restart the level
+		this.cameras.main.flash(300, 255, 0, 0);
+		this.statsService.stopLevel();
+		this.time.delayedCall(400, () => {
+			this.levelManager.resetCurrentLevel();
+			this.loadCurrentLevel();
+		});
 	}
 }

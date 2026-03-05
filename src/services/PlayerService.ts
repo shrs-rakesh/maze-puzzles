@@ -52,7 +52,8 @@ export class PlayerService {
 		dy: number,
 		levelService: LevelService,
 		onGoal: () => void,
-		onStep?: () => void
+		onStep?: () => void,
+		onArrive?: (tileX: number, tileY: number) => void
 	) {
 		if (!this.layout) return;
 		if (this.player.isMoving) return;
@@ -78,9 +79,10 @@ export class PlayerService {
 			duration: MOVE_DURATION_MS,
 			ease: "Quad.easeOut",
 			onComplete: () => {
-				// Guard: player may have been destroyed during level transition
 				if (!this.player?.active) return;
 				this.player.isMoving = false;
+				// onArrive fires first so enemy collision is checked before goal
+				onArrive?.(newX, newY);
 				if (levelService.isGoal(newX, newY)) {
 					onGoal();
 				}
